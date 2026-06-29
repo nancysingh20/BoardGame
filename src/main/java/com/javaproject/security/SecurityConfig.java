@@ -2,12 +2,9 @@ package com.javaproject.security;
 
 import javax.sql.DataSource;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,34 +16,33 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Autowired
-    private LoggingAccessDeniedHandler accessDeniedHandler;
+    private final DataSource dataSource;
+    private final LoggingAccessDeniedHandler accessDeniedHandler;
 
-    @Autowired
-    private DataSource dataSource;
-
-    @Autowired
-    @Lazy
-    private BCryptPasswordEncoder passwordEncoder;
+    public SecurityConfig(DataSource dataSource,
+                          LoggingAccessDeniedHandler accessDeniedHandler) {
+        this.dataSource = dataSource;
+        this.accessDeniedHandler = accessDeniedHandler;
+    }
 
     @Bean
-    public BCryptPasswordEncoder passwordEncoder() {
+    BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
-    public JdbcUserDetailsManager jdbcUserDetailsManager() {
+    JdbcUserDetailsManager jdbcUserDetailsManager() {
         JdbcUserDetailsManager manager = new JdbcUserDetailsManager();
         manager.setDataSource(dataSource);
         return manager;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/user/**", "/secured/**").hasAnyRole("USER", "MANAGER")
+                .requestMatchers("/user/**", "/secured/**").hasAnyRole("USER","MANAGER")
                 .requestMatchers("/manager/**").hasRole("MANAGER")
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/", "/**").permitAll()
@@ -62,28 +58,11 @@ public class SecurityConfig {
                 .clearAuthentication(true)
                 .permitAll()
             )
-            .exceptionHandling(exception -> exception
-                .accessDeniedHandler(accessDeniedHandler)
-            )
+            .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler))
             .csrf(AbstractHttpConfigurer::disable);
 
         http.headers(headers -> headers.frameOptions(frame -> frame.disable()));
 
         return http.build();
-    }
-
-    @Autowired
-    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
-        auth.jdbcAuthentication()
-            .dataSource(dataSource)
-            .withDefaultSchema()
-            .passwordEncoder(passwordEncoder)
-            .withUser("bugs")
-            .password(passwordEncoder.encode("bunny"))
-            .roles("USER")
-            .and()
-            .withUser("daffy")
-            .password(passwordEncoder.encode("duck"))
-            .roles("USER", "MANAGER");
     }
 }
